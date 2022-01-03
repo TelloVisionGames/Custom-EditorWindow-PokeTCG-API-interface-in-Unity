@@ -6,3 +6,5 @@
 !GET_Caller_Editor.cs
 !card/CardRequest.cs
 !set/SetRequest.cs
+
+# end if gitignore
