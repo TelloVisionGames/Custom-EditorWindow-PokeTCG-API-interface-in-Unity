@@ -46,7 +46,7 @@
         
         public string[] rules { get; set; }
         public AncientTrait ancientTrait { get; set; }
-        public Abilities[] abilities { get; set; }
+        public Ability[] abilities { get; set; }
         public Attack[] attacks { get; set; }
         public Weakness[] weaknesses { get; set; }
         public Resistance[] resistances { get; set; }
@@ -64,8 +64,8 @@
 
         public override string ToString()
         {
-            string retStr =
-                "ID: " + id +
+            string retStr = "";
+            /*    "ID: " + id +
                 "\nName: " + name +
                 "\nSuperType: " + supertype +
                 "\nSubtypes: ";
@@ -163,7 +163,7 @@
             }
 
             retStr += "\nConverted Retreat Cost: " +
-                      convertedRetreatCost;
+                      convertedRetreatCost;*/
             
 
             return retStr;
@@ -178,13 +178,15 @@
 
         public override string ToString()
         {
-            return "\nType: " + type +
-                   "\nValue: " + value;
+            string retStr = "";
+            if (type != null) retStr += "\n\tType:\t" + type;
+            if (value != null) retStr += "\n" + value;
+            return retStr;
         }
     }
 
     [System.Serializable]
-    public class Abilities
+    public class Ability
     {
         public string name { get; set; }
         public string text { get; set; }
@@ -192,10 +194,11 @@
 
         public override string ToString()
         {
-            return
-                "\tType:\t" + type +
-                "\n\tName:\t" + name +
-                "\n" + text;
+            string retStr = "";
+            if (type != null) retStr += "\tType:\t" + type;
+            if (name != null) retStr += "\n\tName\t" + name;
+            if (text != null) retStr += "\n" + text;
+            return retStr;
         }
     }
 
@@ -207,8 +210,10 @@
 
         public override string ToString()
         {
-           return "\nName: " + name + 
-                  "\nText: " + text;
+            string retStr = "";
+            if (name != null) retStr += "\n\tName\t" + name;
+            if (text != null) retStr += "\n" + text;
+            return retStr;
         }
     }
 
@@ -221,8 +226,11 @@
         
         public override string ToString()
         {
-            return "\nSmall: " + small + 
-                   "\nLarge: " + large;
+            string retStr = "Images:";
+            
+            if (small != null) retStr += "\n\tSmall: " + small;
+            if (large != null) retStr += "\n\tLarge: " + large;
+            return retStr;
         }
     }
 
@@ -325,18 +333,19 @@
 
         public override string ToString()
         {
-            string retStr = "\nName: " + name + 
-                            "\nCost: \n";
+            string retStr = "";
+            
+            if (name != null) retStr += "Name: " + name;
 
-            foreach (var VARIABLE in cost)
+            if (cost != null)
             {
-                retStr += "\t" + VARIABLE + "\n";
+                foreach (var xCost in cost)
+                {
+                    retStr += "\n" + xCost;
+                }
             }
-
-            retStr += "\nConverted Energy Cost: " + convertedEnergyCost +
-                      "\nDamage: " + damage + 
-                      "\nText: \n\t" + text + "\n";
-
+            
+            
             return retStr;
 
 
