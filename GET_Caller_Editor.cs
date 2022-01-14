@@ -1,96 +1,65 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
-
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
 using Unity.EditorCoroutines.Editor;
 
-using Newtonsoft.Json;
-using Proyecto26;
-using set;
+using Newtonsoft.Json;                          // JSON Package
+using Proyecto26;                               // RestClient package (wrapper over UnityWebRequests)
+
+using set;                                      // Set type matching the JSON representation of a Set
 using card;
-using UnityEditor.VersionControl;
+using Editor.Events;
+using Editor.Listeners;
 
 
 namespace Editor
 {
-    public class GetCallerEditor : EditorWindow
+    public class PokeTCG : EditorWindow
     {
-#region Private Fields
-        private GUILayoutOption[] noExpandOption = { GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false) };
-        private GUILayoutOption[] expandWidthOption = { GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(false) };
-        private GUILayoutOption[] expandHeightOption = { GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(false) };
-        private GUILayoutOption[] expandWidthHeightOption = { GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true) };
+       #region Events Listeners and Windows
+        private static CustomLogWindow _debugLog;
+        private RequestMadeEventListener _requestMadeEventListener;
+        private RequestMadeEvent _requestMadeEvent;
+        #endregion Events Listeners and Windows
+       #region Header Text Fields
+        private Rect hostRect = new Rect(5, 5, 260, 20);
+        private Rect queryTextRect = new Rect(10, 40, 300, 300);
+        private Rect filterRect = new Rect(320, 5, 350, 200);
+        private Rect buttonRowRect = new Rect(0, 150, 800, 100);
+        private Rect lowerOutputPanel = new Rect(5, 200, 790, 550);
+        private Rect buttonColumnRect = new Rect(680, 5, 110, 200);
         
-        private RequestHelper _requestOptions;
-        private ResponseHelper _myResponse;
-        private MultiSetRequest _myMsr;
-        private CardRequest _myCd;
-        private MultiCardRequest _myMultiCd;
-
         private static string _host = "https://api.pokemontcg.io/v2/";
         private static string _query = "";
         private static string _page = "1";
-        private static string _pageSize = "100";
+        private static string _pageSize = "10";
         private static string _orderBy = "";
-        private static string _text = "Nothing Opened...";
-        private static string _queryByID = "hgss1-1";
-
-        private static readonly string[] SearchType = {"Cards", "Sets"};
-        private static int _sgSelected = 0;
-        private static bool setOrCardSelected = false;
-
+        #endregion
+       #region  GUILayoutOption Definitions
+        private GUILayoutOption[] noExpandOption = {GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false)};
+        private GUILayoutOption[] expandWidthOption = {GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(false)};
+        private GUILayoutOption[] expandHeightOption = {GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(false)};
+        private GUILayoutOption[] expandWidthHeightOption = {GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)};
+        #endregion
+       #region Web Request Fields
+        private RequestHelper _requestOptions;
+        private ResponseHelper _myResponse;
+        private MultiSetRequest _multiSetRequest;
+        private MultiCardRequest _multiCardRequest;
+        
         private const string APIKeyValue = "b9afbddc-7eff-4954-82dd-d4ab470e94f7";
         private const string APIKeyName = "X-Api-Key";
-
+        #endregion
+       #region Search Types, Indeces, Editor Window Fields
+        private static readonly string[] SearchType = {"Cards", "Sets"};
+        private static int _sgSelected = 0;
         private static Vector2 _scrollPosition;
-        
-        private static GetCallerEditor _window;
-        
-        private Texture _cardFrontTexture;
-        private Texture _setSymbolTexture;
-        private Texture _setLogoTexture;
-        private Texture _cardBackTexture;
-        private Texture _downloadedTexture;
-
-        private static Dictionary<string, Texture> textureDict;
-
-        private static bool _firstTime = true;
-
         private static int _setIndex = 0;
         private static int _cardIdx = 0;
-        
-        bool idFilter = true;
-        bool nameFilter = true;
-        bool superTypeFilter = true;
-        bool subTypeFilter = true;
-        bool levelFilter = true;
-        bool hpFilter = true;
-        bool typeFilter = true;
-        bool fEvoFilter = true;
-        bool tEvoFilter = true;
-        bool ruleFilter = true;
-        bool ancTFilter = true;
-        bool ablFilter = true;
-        bool atkFilter = true;
-        bool wknsFilter = true;
-        bool resistFilter = true;
-        bool rtrCostFilter = true;
-        bool convRtrCostFilter = true;
-        bool setFilter = true;
-        bool numFilter = true;
-        bool artistFilter = true;
-        bool rarityFilter = true;
-        bool textFilter = true;
-        bool imageFilter = true;
-        bool showFilterToggle24 = true;
-        bool showFilterToggle25 = true;
-#endregion
-        
+        private static PokeTCG _window;
         private enum ImageType
         {
             Logo,
@@ -98,186 +67,327 @@ namespace Editor
             Front,
             Back
         };
+        #endregion
+       #region Texture Fields and Dictionary
+        private static Texture _cardFrontTexture;
+        private static Texture _setSymbolTexture;
+        private static Texture _setLogoTexture;
+        private static Dictionary<string, Texture> _textureDict;
+        #endregion
+       #region Card Info Display Filters
+        bool _idFilter = true;
+        bool _nameFilter = true;
+        bool _superTypeFilter = true;
+        bool _subTypeFilter = true;
+        bool _levelFilter = true;
+        bool _hpFilter = true;
+        bool _typeFilter = true;
+        bool _fEvoFilter = true;
+        bool _tEvoFilter = true;
+        bool _ruleFilter = true;
+        bool _ancTFilter = true;
+        bool _ablFilter = true;
+        bool _atkFilter = true;
+        bool _wknsFilter = true;
+        bool _resistFilter = true;
+        bool _rtrCostFilter = true;
+        bool _convRtrCostFilter = true;
+        bool _setFilter = true;
+        bool _numFilter = true;
+        bool _artistFilter = true;
+        bool _rarityFilter = true;
+        bool _textFilter = true;
+        bool _imageFilter = true;
+
         
-        [MenuItem("Window/pokeGET/Launch")]
+
+        #endregion
+       #region Constructors
+       public PokeTCG()
+       {
+           _requestMadeEventListener = new RequestMadeEventListener();
+           _requestMadeEvent = new RequestMadeEvent();
+           _requestMadeEvent.RegisterListener(_requestMadeEventListener);
+           _debugLog = new CustomLogWindow(ref _requestMadeEventListener);
+       }
+       #endregion Constructors
+       #region Static Methods
+       [MenuItem("Window/pokeGET/Launch")]
         static void Init()
         {
-            if (_firstTime)
-            {
-                textureDict = new Dictionary<string, Texture>();
-                _window = CreateInstance<GetCallerEditor>();
-                _window.minSize = new Vector2(800, 750);
-                _window.maxSize = new Vector2(800, 750);
-                _window.titleContent.text = "pokeGET";
-                _firstTime = false; }
-
             // Get existing open window or if none, make a new one:
-            _window = (GetCallerEditor) EditorWindow.GetWindow(typeof(GetCallerEditor));
-            _window.Repaint();
+            _window = (PokeTCG) EditorWindow.GetWindow(typeof(PokeTCG));
+            _window.titleContent = new GUIContent("Pokemon-TCG REST-API");
+            _window.minSize = new Vector2(800, 750);
+            _window.maxSize = new Vector2(800, 750);
+            _window.maximized = true;
             _window.Show();
         }
-
-       private void OnInspectorUpdate()
+        
+      
+        [MenuItem("Window/pokeGET/Force Stop")]
+        public static void ForceStop()
         {
-            /*if (SearchType[_sgSelected] == "Card" || SearchType[_sgSelected] == "Set")
-            {
-                setOrCardSelected = true;
-            }
-            else
-            {
-                setOrCardSelected = false;
-            }*/
+            if(_window != null) _window.Close();
+        }
+        #endregion Static Methods
+       #region Overrides
+        private void OnDestroy()
+        {
+            Debug.Log("Window.OnDestroy()");
+            CustomLogWindow.CloseConsole();
         }
 
         private void OnGUI()
         {
-           GUILayout.Space(10);
-           
-           
-           GUILayout.BeginHorizontal(EditorStyles.helpBox);
-                GUILayout.BeginVertical(EditorStyles.helpBox);
-                    var orgWidth = EditorGUIUtility.labelWidth;
-                    EditorGUIUtility.labelWidth = 70;
-                    _host = EditorGUILayout.TextField("Host", _host, GUILayout.Width(position.width * .400f));
-                    if (setOrCardSelected)
-                    {
-                        GUILayout.Space(3);
-                        _queryByID =
-                            EditorGUILayout.TextField("id=", _queryByID, GUILayout.Width(position.width * .400f));
-                    }
-                    else
-                    {
-                        GUILayout.Space(3);
-                        _query = EditorGUILayout.TextField("q=", _query, GUILayout.Width(position.width * .400f));
-                        GUILayout.Space(3);
-                        _page = EditorGUILayout.TextField("page=", _page, GUILayout.Width(position.width * .400f));
-                        GUILayout.Space(3);
-                        _pageSize = EditorGUILayout.TextField("pageSize=", _pageSize,
-                            GUILayout.Width(position.width * .400f));
-                        GUILayout.Space(3);
-                        _orderBy = EditorGUILayout.TextField("orderBy=", _orderBy,
-                            GUILayout.Width(position.width * .400f));
-                        GUILayout.Space(5);
-                    }
+           PrintHeaderPanel();
+           PrintButtonRowPanel();
+           PrintLowerOutputPanel();
+        }
+#endregion
+       #region Printing Functions
+        private void PrintLowerOutputPanel()
+        {
+            
+            GUILayout.BeginArea(lowerOutputPanel);
+            EditorGUILayout.BeginHorizontal(/*EditorStyles.helpBox*/);
+            PrintLeftOutputPanel();
+            PrintRightOutputPanel();
+            EditorGUILayout.EndHorizontal(); // This is the horizontal frame containing the Outputpanels
+            GUILayout.EndArea();
+        }
 
-                    EditorGUIUtility.labelWidth = orgWidth;
-                GUILayout.EndVertical();
-                
-                GUILayout.BeginHorizontal(EditorStyles.helpBox);
-                    if (SearchType[_sgSelected] == "Cards" || SearchType[_sgSelected] == "Card")
+        private void PrintRightOutputPanel()
+        {
+              #region Right-Side Vertical Image Output Panel
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.ExpandHeight(true));
+           
+                switch (SearchType[_sgSelected])
+                {
+                   case "Cards":
                     {
-                        GUILayout.BeginVertical(EditorStyles.helpBox); // Area between text fields and buttons for filters
-                        
-                            GUILayout.Label("Filters:");
-                            var oldWidth = EditorGUIUtility.labelWidth;
-                            GUILayout.BeginHorizontal();
-                            // TODO this next section (and all of OnGUI() for that matter) need to be refactored, this is prototype level coding !
-                                EditorGUIUtility.labelWidth = 1.0f;
-                                idFilter = EditorGUILayout.ToggleLeft("ID#", idFilter/*, GUILayout.Width(50)*/);
-                                nameFilter = EditorGUILayout.ToggleLeft("Name", nameFilter/*, GUILayout.Width(50)*/);
-                                superTypeFilter = EditorGUILayout.ToggleLeft("SupT", superTypeFilter/*, GUILayout.Width(50)*/);
-                                subTypeFilter = EditorGUILayout.ToggleLeft("SubT", subTypeFilter/*, GUILayout.Width(50)*/);
-                                levelFilter = EditorGUILayout.ToggleLeft("Lvl", levelFilter/*, GUILayout.Width(50)*/);
-                            GUILayout.EndHorizontal();
-                            
-                            GUILayout.BeginHorizontal();
+                        GUILayout.BeginHorizontal();
+                        if (GUILayout.Button(string.Format("<<"), new GUILayoutOption[]{GUILayout.ExpandWidth(true)}))  // First Card
                             {
-                                hpFilter = EditorGUILayout.ToggleLeft("HP", hpFilter);
-                                typeFilter = EditorGUILayout.ToggleLeft("Type", typeFilter);
-                                fEvoFilter = EditorGUILayout.ToggleLeft("EvoF", fEvoFilter);
-                                tEvoFilter = EditorGUILayout.ToggleLeft("EvoT", tEvoFilter);
-                                ruleFilter = EditorGUILayout.ToggleLeft("Rule", ruleFilter);
+                                if (_multiCardRequest == null || _multiCardRequest.data == null) return;
+                                _cardIdx = 0;
+                               
+                               
+                                RequestImage(_multiCardRequest.data[_cardIdx].images.large, ImageType.Front);
+                                _window.Repaint();
                             }
-                            GUILayout.EndHorizontal();
-                            
-                            GUILayout.BeginHorizontal();
+
+                          
+                            if (GUILayout.Button(string.Format("<-"), new GUILayoutOption[]{GUILayout.ExpandWidth(true)})) // Previous Card
                             {
-                                ancTFilter = EditorGUILayout.ToggleLeft("AncT", ancTFilter);
-                                ablFilter = EditorGUILayout.ToggleLeft("Abl", ablFilter);
-                                atkFilter = EditorGUILayout.ToggleLeft("Atk", atkFilter);
-                                wknsFilter = EditorGUILayout.ToggleLeft("Wkns", wknsFilter);
-                                resistFilter = EditorGUILayout.ToggleLeft("Rst", resistFilter);
+                                if (((_cardIdx - 1) < 0) || (_multiCardRequest == null) || _multiCardRequest.data == null) return;
+
+                                --_cardIdx;
+                                //_text = _multiCardRequest.data[_cardIdx].ToString();
+                               RequestImage(_multiCardRequest.data[_cardIdx].images.large, ImageType.Front);
+                               //_window.Repaint();
+
                             }
-                            GUILayout.EndHorizontal();
+
+                            if (GUILayout.Button(string.Format("->"), new GUILayoutOption[]{GUILayout.ExpandWidth(true)}))  // Next Card
+                            {
+                                if (((_cardIdx + 1) >= _multiCardRequest.data.Length) || (_multiCardRequest == null) || _multiCardRequest.data == null) return;
+
+                                ++_cardIdx;
+                                //_text = _multiCardRequest.data[_cardIdx].ToString();
                                 
-                            GUILayout.BeginHorizontal();
-                            {
-                                rtrCostFilter = EditorGUILayout.ToggleLeft("RtC", rtrCostFilter);
-                                convRtrCostFilter = EditorGUILayout.ToggleLeft("cRtC", convRtrCostFilter);
-                                setFilter = EditorGUILayout.ToggleLeft("Set", setFilter);
-                                numFilter = EditorGUILayout.ToggleLeft("Num", numFilter);
-                                artistFilter = EditorGUILayout.ToggleLeft("Arts", artistFilter);
+                                RequestImage(_multiCardRequest.data[_cardIdx].images.large, ImageType.Front);
                             }
-                            GUILayout.EndHorizontal();
                             
-                            GUILayout.BeginHorizontal();
+                            if (GUILayout.Button(">>", new GUILayoutOption[]{GUILayout.ExpandWidth(true)})) // Last Card
                             {
-                                rarityFilter = EditorGUILayout.ToggleLeft("RarT", rarityFilter);
-                                textFilter = EditorGUILayout.ToggleLeft("Txt", textFilter);
-                                imageFilter = EditorGUILayout.ToggleLeft("Img", imageFilter);
-                                if (GUILayout.Button("Select All"))
+                                if (_multiCardRequest == null || _multiCardRequest.data == null) return;
+                                _cardIdx = _multiCardRequest.data.Length-1;
+                                //_text = _multiCardRequest.data[_cardIdx].ToString();
+                                RequestImage(_multiCardRequest.data[_cardIdx].images.large, ImageType.Front);
+                                
+                            }
+                            
+                            
+                            
+                        GUILayout.EndHorizontal();
+                    
+                        GUILayout.BeginVertical();
+                                GUILayoutOption[] frontLayout =
                                 {
-                                    idFilter = nameFilter = superTypeFilter = subTypeFilter =
-                                        levelFilter = hpFilter = typeFilter = fEvoFilter =
-                                            tEvoFilter = ruleFilter = ancTFilter =
-                                                ablFilter = atkFilter = wknsFilter =
-                                                    resistFilter = rtrCostFilter = convRtrCostFilter =
-                                                        setFilter = numFilter = artistFilter =
-                                                            rarityFilter = textFilter =
-                                                                imageFilter = showFilterToggle24 =
-                                                                    showFilterToggle25 = true;
+                                    GUILayout.Width(500*0.75f),
+                                    GUILayout.Height(700*0.75f)
+                                    
+                                };
+                                GUILayout.Label(_cardFrontTexture, frontLayout);
+                        GUILayout.EndVertical();
+                        break;
+                    }
+                   
+                    case "Sets":
+                    {
+                        GUILayout.BeginHorizontal();
+                                if (GUILayout.Button("<-"))
+                                {
+                                    if (((_setIndex - 1) < 0) || (_multiSetRequest == null) ||(_multiSetRequest.data)== null) return;
+
+                                    --_setIndex;
+                                  //  _text = _multiSetRequest.data[_setIndex].ToString();
+                                    RequestImage(_multiSetRequest.data[_setIndex].images.symbol, ImageType.Symbol);
+                                    RequestImage(_multiSetRequest.data[_setIndex].images.logo, ImageType.Logo);
                                 }
 
-                                if (GUILayout.Button("None"))
+                                if (GUILayout.Button("->"))
                                 {
-                                    idFilter = nameFilter = superTypeFilter = subTypeFilter =
-                                        levelFilter = hpFilter = typeFilter = fEvoFilter =
-                                            tEvoFilter = ruleFilter = ancTFilter =
-                                                ablFilter = atkFilter = wknsFilter =
-                                                    resistFilter = rtrCostFilter = convRtrCostFilter =
-                                                        setFilter = numFilter = artistFilter =
-                                                            rarityFilter = textFilter =
-                                                                imageFilter = showFilterToggle24 =
-                                                                    showFilterToggle25 = false;
+                                    if (((_setIndex + 1) >= _multiSetRequest.data.Length) || (_multiSetRequest == null)) return;
+
+                                    ++_setIndex;
+                                //    _text = _multiSetRequest.data[_setIndex].ToString();
+                                    RequestImage(_multiSetRequest.data[_setIndex].images.symbol, ImageType.Symbol);
+                                    RequestImage(_multiSetRequest.data[_setIndex].images.logo, ImageType.Logo);
                                 }
-                            }
+                        GUILayout.EndHorizontal();
+                        
+                        GUILayout.BeginVertical();
+                            GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                                    GUILayoutOption[] symbolLayout = {GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false),  GUILayout.Width(250.0f), GUILayout.Height(250.0f)};
+                                    GUILayout.Label(_setSymbolTexture, symbolLayout);
+                                    
                             GUILayout.EndHorizontal();
-                            EditorGUIUtility.labelWidth = oldWidth;
+                            
+                            GUILayout.BeginHorizontal(EditorStyles.helpBox);
+                                GUILayoutOption[] logoLayout = {GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false),  GUILayout.Width(250.0f), GUILayout.Height(250.0f)};
+                                GUILayout.Label(_setLogoTexture, logoLayout);
+                            GUILayout.EndHorizontal();
                         GUILayout.EndVertical();
                         
+                        break;
+                    }
+                }
+                
+                EditorGUILayout.EndVertical();
+                #endregion // End Right-Side Vertical Image Output Panel
+        }
+
+        private void PrintFormattedCardData(CardData cardData)
+        {
+            if (cardData == null) return;
+            GUIStyle boldStyle = new GUIStyle();
+            boldStyle.richText = true;
+            
+            if(_idFilter) EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>ID:</b></color> <color=WHITE>{0}</color></size>", cardData.id), boldStyle);
+            if(_nameFilter) EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>Name:</b></color> <color=WHITE>{0}</color></size>", cardData.name), boldStyle);
+            if(_superTypeFilter) EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>Supertype:</b></color> <color=WHITE>{0}</color></size>", cardData.supertype), boldStyle);
+            if (_subTypeFilter)
+            {
+                EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>Subtypes:</b></color></size>"), boldStyle);
+
+                foreach (var sT in cardData.subtypes) 
+                {
+                    EditorGUILayout.LabelField(string.Format("<size=15><color=WHITE>\t{0}</color></size>",sT), boldStyle);
+                }
+            }
+            
+            if(_levelFilter) EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>Level:</b></color> <color=WHITE>{0}</color></size>", cardData.level), boldStyle);
+            
+            if(_hpFilter) EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>HP:</b></color> <color=WHITE>{0}</color></size>", cardData.hp), boldStyle);
+             
+            
+            if (_typeFilter)
+            {
+                EditorGUILayout.LabelField(string.Format("<size=15><color=YELLOW><b>Types:</b></color></size>"), boldStyle);
+
+                foreach (var type in cardData.types) 
+                {
+                    EditorGUILayout.LabelField(string.Format("<size=15><color=WHITE>\t{0}</color></size>",type), boldStyle);
+                }
+            }
+            
+        }
+
+        private void PrintLeftOutputPanel()
+        {
+            #region Left Output Panel
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            _scrollPosition = EditorGUILayout.BeginScrollView(
+                _scrollPosition,
+                alwaysShowHorizontal: false,
+                alwaysShowVertical: false,
+                GUILayout.ExpandHeight(true),
+                GUILayout.ExpandWidth(false),
+                GUILayout.Width(position.width*.50f)
+            );
+                 
+            PrintFormattedCardData(_multiCardRequest.data[_cardIdx]);
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
+           #endregion // Left output panel
+        }
+
+        private void PrintButtonRowPanel()
+        {
+            
+            GUILayout.BeginArea(buttonRowRect);
+            GUILayoutOption[] selGridOpts = expandWidthOption;
+            
+            GUILayout.BeginHorizontal(EditorStyles.helpBox, selGridOpts);
+            _sgSelected = GUILayout.SelectionGrid(_sgSelected, SearchType, SearchType.Length, selGridOpts);
+            GUILayout.Space(5);
+            
+            
+            if (GUILayout.Button("Submit", expandWidthOption))
+            {
+                //_debugLog.Log("Submit Button Pressed");
+                Get();
+            }
+            
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+
+        private void PrintHeaderPanel()
+        {
+            GUILayout.Space(10);
+             GUILayout.BeginHorizontal();
+
+             PrintHostLabel();
+             PrintQueryTextFields();
+             
+             GUILayout.BeginHorizontal(/*EditorStyles.helpBox*/);
+                    if (SearchType[_sgSelected] == "Cards" )
+                    {
+                        PrintFilterToggles();
+
+                        GUILayout.BeginArea(buttonColumnRect);
                         GUILayout.BeginVertical(); // 4 Button Column top right of screen
                             GUILayout.Space(2.75f);
                             if(GUILayout.Button("Generate SOs", expandWidthOption))
                             {
-                                if (_myMultiCd != null)
+                                if (_multiCardRequest != null)
                                 {
-                                    ExportCardsAsSO(_myMultiCd);
+                                    ExportCardsAsSO(_multiCardRequest);
                                 }
                             }
                             GUILayout.Space(2.75f);
                         
-                            if(GUILayout.Button("Button", expandWidthOption))
+                            if(GUILayout.Button("Debug Log", expandWidthOption))
                             {
-                                if (_myMultiCd != null)
-                                {
-                                }
+                               
+                                //_debugLog = PokeTCG_Debug_Output.Init();
+                                CustomLogWindow.OpenWindow();
                             }
                             GUILayout.Space(2.75f);
                         
-                        if(GUILayout.Button("Button", expandWidthOption))
+                        if(GUILayout.Button("Close Log", expandWidthOption))
                         {
-                            if (_myMultiCd != null)
-                            {
-                            }
+                            CustomLogWindow.CloseConsole();
                         }
                         
                         GUILayout.Space(2.75f);
                         
-                        if(GUILayout.Button("Button", expandWidthOption))
+                        if(GUILayout.Button("Clear Cache", expandWidthOption))
                         {
-                            if (_myMultiCd != null)
-                            {
-                            }
+                            _textureDict.Clear();
                         }
                         
                         GUILayout.Space(2.75f);
@@ -291,185 +401,139 @@ namespace Editor
                         GUILayout.Space(2.75f);
                         
                         GUILayout.EndVertical();
-
+                        GUILayout.EndArea();
                     }
-                    
                     GUILayout.EndHorizontal();
 
                     
             GUILayout.EndHorizontal();
+        }
 
-
-            GUILayoutOption[] selGridOpts = expandWidthOption;
-            
-            GUILayout.BeginHorizontal(EditorStyles.helpBox, selGridOpts);
-            _sgSelected = GUILayout.SelectionGrid(_sgSelected, SearchType, SearchType.Length, selGridOpts);
-            GUILayout.Space(5);
-            
-            
-            if (GUILayout.Button("Submit", expandWidthOption))
-            {
-                Get();
-            }
-            
-            GUILayout.EndHorizontal();
-
-         
-            EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
-                #region Left Output Panel
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                    _scrollPosition = EditorGUILayout.BeginScrollView(
-                            _scrollPosition,
-                            alwaysShowHorizontal: false,
-                            alwaysShowVertical: false,
-                            GUILayout.ExpandHeight(true),
-                            GUILayout.ExpandWidth(false),
-                            GUILayout.Width(position.width*.50f)
-                            );
-                 
-                            GUILayoutOption[] textOutLayout = { GUILayout.ExpandHeight(true), GUILayout.ExpandWidth(false), GUILayout.Width(position.width * .5f)};
-                            
-                            GUILayout.Label(_text, EditorStyles.wordWrappedLabel, textOutLayout);
-                    EditorGUILayout.EndScrollView();
-            EditorGUILayout.EndVertical();
-            #endregion // Left output panel
-                #region Right-Side Vertical Image Output Panel
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.ExpandHeight(true));
+        private void PrintHostLabel()
+        {
+            GUILayout.BeginArea(hostRect);
            
-                switch (SearchType[_sgSelected])
-                {
-                    /*case "Card":
-                    {
-                        GUILayoutOption[] imgOutLayout = new GUILayoutOption[]{GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false), GUILayout.Width(500*0.75f), GUILayout.Height(700*0.75f)};
-                        _text =  "\n" + FormatCardOutput(_myCd.data);
-                        GUILayout.Label(_cardFrontTexture, imgOutLayout);
-                        break;
-                    }*/
-                    case "Cards":
-                    {
-                        GUILayout.BeginHorizontal();
-                            if (GUILayout.Button(string.Format("<<"))) // First Card
-                            {
-                                if (_myMultiCd == null || _myMultiCd.data == null) return;
-                                _cardIdx = 0;
-                               
-                               
-                                _cardFrontTexture =  RequestImage(_myMultiCd.data[_cardIdx].images.large, ImageType.Front);
-                            }
+            
+            GUIStyle guiStyle = new GUIStyle();
+            guiStyle.richText = true;
+            
+            EditorGUILayout.SelectableLabel(  string.Format("<color=WHITE><size=15><b> Host:   </b></size></color><color=MAGENTA><size=15>{0}</size></color>",_host), guiStyle);
+            GUILayout.EndArea();
+        }
 
-                          
-                            if (GUILayout.Button("<-")) // Previous Card
-                            {
-                                if (((_cardIdx - 1) < 0) || (_myMultiCd == null) || _myMultiCd.data == null) return;
-
-                                --_cardIdx;
-                                _text = _myMultiCd.data[_cardIdx].ToString();
-                                _cardFrontTexture =  RequestImage(_myMultiCd.data[_cardIdx].images.large, ImageType.Front);
-
-                            }
-
-                            if (GUILayout.Button(string.Format("->"))) // Next Card
-                            {
-                                if (((_cardIdx + 1) >= _myMultiCd.data.Length) || (_myMultiCd == null) || _myMultiCd.data == null) return;
-
-                                ++_cardIdx;
-                                _text = _myMultiCd.data[_cardIdx].ToString();
-                                
-                                _cardFrontTexture = RequestImage(_myMultiCd.data[_cardIdx].images.large, ImageType.Front);
-                            }
-                            
-                            if (GUILayout.Button(">>")) // Last Card
-                            {
-                                if (_myMultiCd == null || _myMultiCd.data == null) return;
-                                _cardIdx = _myMultiCd.data.Length-1;
-                                _text = _myMultiCd.data[_cardIdx].ToString();
-                                _cardFrontTexture = RequestImage(_myMultiCd.data[_cardIdx].images.large, ImageType.Front);
-                            }
-                            
-                            _text =  "\n" + FormatCardOutput(_myMultiCd.data[_cardIdx]);
-                        GUILayout.EndHorizontal();
-                    
-                        GUILayout.BeginVertical();
-                                GUILayoutOption[] frontLayout =
-                                {
-                                    GUILayout.Width(500*0.75f),
-                                    GUILayout.Height(700*0.75f)
-                                };
-                                GUILayout.Label(_cardFrontTexture, frontLayout);
-                        GUILayout.EndVertical();
-                        break;
-                    }
-                   
-                    case "Sets":
-                    {
-                        GUILayout.BeginHorizontal();
-                                if (GUILayout.Button("<-"))
-                                {
-                                    if (((_setIndex - 1) < 0) || (_myMsr == null) ||(_myMsr.data)== null) return;
-
-                                    --_setIndex;
-                                    _text = _myMsr.data[_setIndex].ToString();
-                                    _setSymbolTexture =  RequestImage(_myMsr.data[_setIndex].images.symbol, ImageType.Symbol);
-                                    _setLogoTexture =  RequestImage(_myMsr.data[_setIndex].images.logo, ImageType.Logo);
-                                }
-
-                                if (GUILayout.Button("->"))
-                                {
-                                    if (((_setIndex + 1) >= _myMsr.data.Length) || (_myMsr == null)) return;
-
-                                    ++_setIndex;
-                                    _text = _myMsr.data[_setIndex].ToString();
-                                    _setSymbolTexture =  RequestImage(_myMsr.data[_setIndex].images.symbol, ImageType.Symbol);
-                                    _setLogoTexture =  RequestImage(_myMsr.data[_setIndex].images.logo, ImageType.Logo);
-                                }
-                        GUILayout.EndHorizontal();
-                        
-                        GUILayout.BeginVertical();
-                            GUILayout.BeginHorizontal(EditorStyles.helpBox);
-                                    GUILayoutOption[] symbolLayout = {GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false),  GUILayout.Width(250.0f), GUILayout.Height(250.0f)};
-                                  //  GUILayout.Label("Symbol");
-                                    GUILayout.Label(_setSymbolTexture, symbolLayout);
+        private void PrintFilterToggles()
+        {
+            GUIStyle guiStyle = new GUIStyle();
+            guiStyle.richText = true;
+            
+            GUILayout.BeginArea(filterRect);
+            GUILayout.BeginVertical(EditorStyles.helpBox); // Area between text fields and buttons for filters
+                            GUILayout.Label( string.Format("<color=WHITE><b>Filters:</b></color>"), guiStyle);
+                            var oldWidth = EditorGUIUtility.labelWidth;
+                            GUILayout.BeginHorizontal();
+                            // TODO this next section (and all of OnGUI() for that matter) need to be refactored, this is prototype level coding !
+                                EditorGUIUtility.labelWidth = 1.0f;
+                                _idFilter = EditorGUILayout.ToggleLeft("ID#", _idFilter/*, GUILayout.Width(50)*/);
+                                _nameFilter = EditorGUILayout.ToggleLeft("Name", _nameFilter/*, GUILayout.Width(50)*/);
+                                _superTypeFilter = EditorGUILayout.ToggleLeft("SupT", _superTypeFilter/*, GUILayout.Width(50)*/);
+                                _subTypeFilter = EditorGUILayout.ToggleLeft("SubT", _subTypeFilter/*, GUILayout.Width(50)*/);
+                                _levelFilter = EditorGUILayout.ToggleLeft("Lvl", _levelFilter/*, GUILayout.Width(50)*/);
                             GUILayout.EndHorizontal();
                             
-                            GUILayout.BeginHorizontal(EditorStyles.helpBox);
-                                GUILayoutOption[] logoLayout = {GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false),  GUILayout.Width(250.0f), GUILayout.Height(250.0f)};
-                                //GUILayout.Label("Logo");
+                            GUILayout.BeginHorizontal();
+                            {
+                                _hpFilter = EditorGUILayout.ToggleLeft("HP", _hpFilter);
+                                _typeFilter = EditorGUILayout.ToggleLeft("Type", _typeFilter);
+                                _fEvoFilter = EditorGUILayout.ToggleLeft("EvoF", _fEvoFilter);
+                                _tEvoFilter = EditorGUILayout.ToggleLeft("EvoT", _tEvoFilter);
+                                _ruleFilter = EditorGUILayout.ToggleLeft("Rule", _ruleFilter);
+                            }
+                            GUILayout.EndHorizontal();
+                            
+                            GUILayout.BeginHorizontal();
+                            {
+                                _ancTFilter = EditorGUILayout.ToggleLeft("AncT", _ancTFilter);
+                                _ablFilter = EditorGUILayout.ToggleLeft("Abl", _ablFilter);
+                                _atkFilter = EditorGUILayout.ToggleLeft("Atk", _atkFilter);
+                                _wknsFilter = EditorGUILayout.ToggleLeft("Wkns", _wknsFilter);
+                                _resistFilter = EditorGUILayout.ToggleLeft("Rst", _resistFilter);
+                            }
+                            GUILayout.EndHorizontal();
                                 
-                                GUILayout.Label(_setLogoTexture, logoLayout);
-                                GUILayout.EndHorizontal();
+                            GUILayout.BeginHorizontal();
+                            {
+                                _rtrCostFilter = EditorGUILayout.ToggleLeft("RtC", _rtrCostFilter);
+                                _convRtrCostFilter = EditorGUILayout.ToggleLeft("cRtC", _convRtrCostFilter);
+                                _setFilter = EditorGUILayout.ToggleLeft("Set", _setFilter);
+                                _numFilter = EditorGUILayout.ToggleLeft("Num", _numFilter);
+                                _artistFilter = EditorGUILayout.ToggleLeft("Arts", _artistFilter);
+                            }
+                            GUILayout.EndHorizontal();
+                            
+                            GUILayout.BeginHorizontal();
+                            {
+                                _rarityFilter = EditorGUILayout.ToggleLeft("RarT", _rarityFilter);
+                                _textFilter = EditorGUILayout.ToggleLeft("Txt", _textFilter);
+                                _imageFilter = EditorGUILayout.ToggleLeft("Img", _imageFilter);
+                                
 
+                                if (GUILayout.Button("Select All"))
+                                {
+                                    _idFilter = _nameFilter = _superTypeFilter = _subTypeFilter =
+                                        _levelFilter = _hpFilter = _typeFilter = _fEvoFilter =
+                                            _tEvoFilter = _ruleFilter = _ancTFilter =
+                                                _ablFilter = _atkFilter = _wknsFilter =
+                                                    _resistFilter = _rtrCostFilter = _convRtrCostFilter =
+                                                        _setFilter = _numFilter = _artistFilter =
+                                                            _rarityFilter = _textFilter =
+                                                                _imageFilter =  true;
+                                }
+
+                                if (GUILayout.Button("None"))
+                                {
+                                    _idFilter = _nameFilter = _superTypeFilter = _subTypeFilter =
+                                        _levelFilter = _hpFilter = _typeFilter = _fEvoFilter =
+                                            _tEvoFilter = _ruleFilter = _ancTFilter =
+                                                _ablFilter = _atkFilter = _wknsFilter =
+                                                    _resistFilter = _rtrCostFilter = _convRtrCostFilter =
+                                                        _setFilter = _numFilter = _artistFilter =
+                                                            _rarityFilter = _textFilter =
+                                                                _imageFilter =  false;
+                                }
+                            }
+                            GUILayout.EndHorizontal();
+                            EditorGUIUtility.labelWidth = oldWidth;
                         GUILayout.EndVertical();
-                        break;
-                    }
-                }
-                
-                EditorGUILayout.EndVertical();
-                #endregion // End Right-Side Vertical Image Output Panel
-            EditorGUILayout.EndHorizontal(); // This is the horizontal frame containing the Outputpanels
+                        GUILayout.EndArea();
+                        
         }
 
-        private void ExportCardsAsSO(MultiCardRequest mcReq)
+        private void PrintQueryTextFields()
         {
-            int cardNum = 1;
-            string path = "";// = string.Format("Assets/DeckData/HGSS1/card{0}", cardNum);
-            List<LineItem> lItems = new List<LineItem>();
-            foreach (var card in mcReq.data)
-            {
-                path = string.Format("Assets/DeckData/Decks/MindFlood/Roster/{0}.asset", card.name);
+            GUILayout.BeginArea(queryTextRect);
+            var orgWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = 70;
+            GUILayout.BeginVertical();
+                _query = EditorGUILayout.TextField("q=", _query, GUILayout.Width(position.width * .400f));
+                GUILayout.Space(3);
                 
-                lItems.Add(ScriptableObject.CreateInstance<LineItem>().Init(card.set.id, 0, card.id));
-           
-                AssetDatabase.CreateAsset(lItems[cardNum-1], path);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
-                EditorUtility.FocusProjectWindow();
-                Selection.activeObject = lItems[cardNum-1];
-                ++cardNum;
-            }
-
-            
+                _page = EditorGUILayout.TextField("page=", _page, GUILayout.Width(position.width * .400f));
+                GUILayout.Space(3);
+                
+                _pageSize = EditorGUILayout.TextField("pageSize=", _pageSize,
+                    GUILayout.Width(position.width * .400f));
+                GUILayout.Space(3);
+                
+                _orderBy = EditorGUILayout.TextField("orderBy=", _orderBy,
+                    GUILayout.Width(position.width * .400f));
+                //GUILayout.Space(5);
+                
+            EditorGUIUtility.labelWidth = orgWidth;
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
         }
-
+        #endregion Printing Functions
+       #region Request Methods
         private void Get()
         {
             var searchTypeString = SearchType[_sgSelected].ToLower(); // initialize searchTypeString for url concatenation
@@ -497,8 +561,7 @@ namespace Editor
                     RedirectLimit = 32
                 };
 
-            EditorCoroutineUtility.StartCoroutineOwnerless(
-                HttpBase.DefaultUnityWebRequest(_requestOptions, (err, response) =>
+            EditorCoroutineUtility.StartCoroutineOwnerless(HttpBase.DefaultUnityWebRequest(_requestOptions, (err, response) =>
                 {
                     if (err != null)
                     {
@@ -519,189 +582,107 @@ namespace Editor
                 case "Sets": 
                 {
                     _setIndex = 0;
-                    _myMsr = JsonConvert.DeserializeObject<set.MultiSetRequest>(res.Request.downloadHandler.text);
-                    _text += "\n" + _myMsr.data[0].ToString();
-                    _setSymbolTexture =  RequestImage(_myMsr.data[0].images.symbol, ImageType.Symbol);
-                    //_setSymbolTexture = _downloadedTexture;
-                    GetWindow<GetCallerEditor>().Repaint();
-                    _setLogoTexture =  RequestImage(_myMsr.data[0].images.logo, ImageType.Logo);
-                    //_setLogoTexture = _downloadedTexture;
-                    GetWindow<GetCallerEditor>().Repaint();
+                    _multiSetRequest = new MultiSetRequest();
+                    _multiSetRequest = JsonConvert.DeserializeObject<set.MultiSetRequest>(res.Request.downloadHandler.text);
+              //      _text += "\n" + _multiSetRequest.data[0].ToString();
+                   RequestImage(_multiSetRequest.data[0].images.symbol, ImageType.Symbol);
+                   RequestImage(_multiSetRequest.data[0].images.logo, ImageType.Logo);
+                    GetWindow<PokeTCG>().Repaint();
                     break;
                 }
                 case "Cards": 
                 {
                     _cardIdx = 0;
-                    _myMultiCd = JsonConvert.DeserializeObject<card.MultiCardRequest>(res.Request.downloadHandler.text);
-                    
-                    _cardFrontTexture =  RequestImage(_myMultiCd.data[0].images.large, ImageType.Front);
-                    //_cardFrontTexture = _downloadedTexture;
-                    GetWindow<GetCallerEditor>().Repaint();
+                    _multiCardRequest = new MultiCardRequest();
+                    _multiCardRequest = JsonConvert.DeserializeObject<card.MultiCardRequest>(res.Request.downloadHandler.text);
+            //        _text += "\n" + _multiCardRequest.data[0].ToString();
+                    RequestImage(_multiCardRequest.data[0].images.large, ImageType.Front);
+                    GetWindow<PokeTCG>().Repaint();
                     break;
                 }
             }
         }
-
-
-        private string FormatCardOutput(CardData cDat)
-        {
-            string retStr = "";
-
-            if (idFilter == true) retStr += "ID: " + cDat.id.ToString();
-            if ( nameFilter == true)retStr += "\nName: " +  cDat.name.ToString();
-            if ( superTypeFilter == true)retStr += "\nSupertype: " + cDat.supertype.ToString();
-            if (subTypeFilter == true)
-            {
-                retStr += "\nSubtypes: ";
-                foreach (var cDatSubtype in cDat.subtypes)
-                {
-                    retStr += "\n\t" + cDatSubtype;
-                }
-
-            }
-            if ( levelFilter == true)
-            {
-                retStr += "\nLevel: ";
-                if(cDat.level != null) retStr += cDat.level;
-                
-            }
-            
-            
-            if ( hpFilter == true)retStr += "\nHP: " + cDat.hp;
-
-            
-            if (typeFilter == true)
-            {
-                retStr += "\nTypes: ";
-                foreach (var typ in cDat.types)
-                {
-                    retStr += "\n\t" + typ;
-                }
-                
-            }
-            
-            if ( fEvoFilter == true)
-            {
-                retStr += "\nEvolves From: ";
-                if(cDat.evolvesFrom != null) retStr += cDat.evolvesFrom.ToString();
-            }
-            
-            if (tEvoFilter == true)
-            {
-                retStr += "\nEvolves To: ";
-                if (cDat.evolvesTo != null)
-                {
-                    foreach (var toPoke in cDat.evolvesTo)
-                    {
-                        retStr += "\n\t" + toPoke;
-                    }    
-                }
-                
-                
-            }
-            
-            if (ruleFilter == true)
-            {
-                retStr += "\nRules: ";
-                foreach (var rule in cDat.rules)
-                {
-                    retStr += "\n\t" + rule;
-                }
-                
-            }
-            if (ancTFilter == true)
-            {
-                retStr += "\nAncient Trait: ";
-                if(cDat.ancientTrait != null) retStr += cDat.ancientTrait.ToString();
-            }
-            
-            if (ablFilter == true)
-            {
-                retStr += "\nAbilities: ";
-                if (cDat.abilities != null)
-                {
-                    foreach (var abil in cDat.abilities)
-                    {
-                        retStr += "\n" + abil.ToString();
-                    }
-                }
-            }
-            
-            if (atkFilter == true)
-            {
-                retStr += "\nAttacks: ";
-                if (cDat.attacks != null)
-                {
-                    foreach (var atk in cDat.attacks)
-                    {
-                        retStr += "\n" + atk.ToString();
-                    }
-                }
-            }
-            
-            
-           // if ( wknsFilter == true)retStr += "\n" + cDat.weaknesses.ToString();
-            //if ( resistFilter == true)retStr += "\n" + cDat.resistances.ToString();
-            //if ( rtrCostFilter == true)retStr += "\n" + cDat.retreatCost.ToString();
-            //if (convRtrCostFilter == true) retStr +=  "\n" + cDat.convertedRetreatCost.ToString();
-            if ( setFilter == true)retStr += "\n" + cDat.set.ToString();
-            //if ( numFilter == true)retStr += "\n" + cDat.number.ToString();
-            //if ( artistFilter == true)retStr += "\n" + cDat.artist.ToString();
-            //if ( rarityFilter == true)retStr += "\n" + cDat.rarity.ToString();
-            //if ( textFilter == true)retStr +=cDat.;
-            if (imageFilter == true) retStr +=  "\n" + cDat.images.ToString();
-            
-            
-
-            return retStr;
-        }
         
-        private Texture RequestImage(string url, ImageType imgT)
+        private void RequestImage(string url, ImageType imgT)
         {
-            if (textureDict.ContainsKey(url))
+           
+            _requestMadeEvent.Raise();
+            Debug.Log("Image Requested: " + url);
+            
+            if (_textureDict == null) _textureDict = new Dictionary<string, Texture>();
+            if (!_textureDict.ContainsKey(url))
             {
-                return textureDict[url];
+                var req = UnityWebRequestTexture.GetTexture(url);
+                EditorCoroutineUtility.StartCoroutine(DownloadImage(url, imgT, req), this);
             }
-            
-            EditorCoroutineUtility.StartCoroutine(DownloadImage(url, imgT), this);
-            
-            
-            return textureDict[url];
-
-        }
-
-        private IEnumerator DownloadImage(string url, ImageType imgT)
-        {
-            var request = UnityWebRequestTexture.GetTexture(url);
-            yield return request.SendWebRequest();
-            
-            if (request.result != UnityWebRequest.Result.Success)
-                Debug.Log(request.error);
-            
             else
             {
-                _downloadedTexture = ((DownloadHandlerTexture) request.downloadHandler).texture;
-                textureDict.Add(url, _downloadedTexture);
-                switch (imgT)
-                {
-                    case ImageType.Logo:
-                        _setLogoTexture = ((DownloadHandlerTexture) request.downloadHandler).texture;
-                        break;
-                    case ImageType.Symbol:
-                        _setSymbolTexture = ((DownloadHandlerTexture) request.downloadHandler).texture;
-                        break;
-                    case ImageType.Front:
-                        _cardFrontTexture = ((DownloadHandlerTexture) request.downloadHandler).texture;
-                        break;
-                    case ImageType.Back:
-                        _cardBackTexture = ((DownloadHandlerTexture) request.downloadHandler).texture;
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(imgT), imgT, null);
+                SetImageByType(url, imgT);
+            }
+            
+        }
 
-                }
+        void SetImageByType(string url, ImageType imgT)
+        {
+            switch (imgT)
+            {
+                case ImageType.Logo:
+                    _setLogoTexture = _textureDict[url];
+                    break;
+                case ImageType.Symbol:
+                    _setSymbolTexture = _textureDict[url];
+                    break;
+                case ImageType.Front:
+                    _cardFrontTexture = _textureDict[url];
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(imgT), imgT, null);
             }
         }
+        private IEnumerator DownloadImage(string url, ImageType imgT, UnityWebRequest wReq)
+        {
+           
+            yield return wReq.SendWebRequest();
+            if (wReq.responseCode != 200) yield break;
+            if (!wReq.isDone) yield break;
+            
+            var tex = new Texture2D(0, 0);
+            tex = ((DownloadHandlerTexture) wReq.downloadHandler).texture;
+            
+            _textureDict.Add(url, tex);
+            
+            Debug.Log("New Texture Dict entry: " + url);
+            
+            if (!_textureDict.TryGetValue(url, out Texture tempTexture2)) yield break;
+            SetImageByType(url, imgT);
+
+
+
+
+
+        }
+        #endregion Request Methods
+       #region Utility Methods (For features like exporting card data)
+        private void ExportCardsAsSO(MultiCardRequest mcReq)
+        {
+            int cardNum = 1;
+            string path = "";// = string.Format("Assets/DeckData/HGSS1/card{0}", cardNum);
+            List<LineItem> lItems = new List<LineItem>();
+            foreach (var card in mcReq.data)
+            {
+                path = string.Format("Assets/DeckData/Decks/MindFlood/Roster/{0}.asset", card.name);
+                
+                lItems.Add(ScriptableObject.CreateInstance<LineItem>().Init(card.set.id, 0, card.id));
+           
+                AssetDatabase.CreateAsset(lItems[cardNum-1], path);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                EditorUtility.FocusProjectWindow();
+                Selection.activeObject = lItems[cardNum-1];
+                ++cardNum;
+            }
+        }
+        #endregion Utility Methods (For features like exporting card data)
     }
 }
 

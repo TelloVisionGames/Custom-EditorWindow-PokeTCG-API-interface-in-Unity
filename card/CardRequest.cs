@@ -335,15 +335,27 @@
         {
             string retStr = "";
             
-            if (name != null) retStr += "Name: " + name;
+            if (name != null) retStr += "\nName: " + name;
 
             if (cost != null)
             {
+                retStr += "\n\tCost: ";
                 foreach (var xCost in cost)
                 {
-                    retStr += "\n" + xCost;
+                    retStr += "\n\t\t" + xCost;
                 }
             }
+
+            if (damage != null)
+            {
+                retStr += "\n\tDMG: " + damage;
+            }
+            
+            if (text != null)
+            {
+                retStr += "\n\n" + text;
+            }
+            
             
             
             return retStr;
@@ -361,8 +373,8 @@
         public override string ToString()
         {
             return
-                "\nType: " + type +
-                "\nValue: " + value;
+                "\tType: " + type +
+                "\n\tValue: " + value;
         }
     }
 }
