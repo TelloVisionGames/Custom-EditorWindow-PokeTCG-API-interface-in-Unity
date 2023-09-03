@@ -20,11 +20,12 @@
 <p>The answer to both is <b>Yes!</b></p>
 <hr>
 <h4>Demo Videos</h4>
-<iframe width="800" height="450" src="https://www.youtube.com/embed/S0erU7VOkkg?si=DV5msCV0-Xeq4_Iy" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-<hr>
-<iframe width="800" height="450" src="https://www.youtube.com/embed/Kjtuj2zLMKQ?si=DV5msCV0-Xeq4_Iy" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-<hr>
-<iframe width="800" height="450" src="https://www.youtube.com/embed/Y7rThdeRpcM?si=DV5msCV0-Xeq4_Iy" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
+https://www.youtube.com/watch?v=Y7rThdeRpcM
+
+https://www.youtube.com/watch?v=S0erU7VOkkg
+
+https://www.youtube.com/watch?v=Kjtuj2zLMKQ&t=7s
 
 --- 
 
